@@ -77,7 +77,6 @@ function compressData(data) {
 
 function generatePayloads(logs, context) {
 
-    context.log('What context did we get?', context);
     const common = {
         'attributes': {
             'plugin': {
@@ -85,11 +84,7 @@ function generatePayloads(logs, context) {
                 'version': VERSION,
                 // https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger?tabs=javascript#blob-name-patterns
                 // Using the context bindings we get from the blob path to parameterise the path and add those variables as common attrs
-                'year': context.bindingData.year,
-                'month': context.bindingData.month,
-                'day': context.bindingData.day,
-                'hour': context.bindingData.hour,
-                'minute': context.bindingData.minute,
+                'azureSourceTimestamp': `${context.bindingData.year}-${context.bindingData.month}-${context.bindingData.day} ${context.bindingData.hour}:${'minute'}: ${context.bindingData.minute}:00`,
                 'macAddress': context.bindingData.macAddress,
                 'networkSecurityGroupId': context.bindingData.networkSecurityGroupId
                 },
