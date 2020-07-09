@@ -75,7 +75,16 @@ function generatePayloads(logs, context) {
         'attributes': {
             'plugin': {
                 'type': NR_LOGS_SOURCE,
-                'version': VERSION
+                'version': VERSION,
+                // https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger?tabs=javascript#blob-name-patterns
+                // Using the context bindings we get from the blob path to parameterise the path and add those variables as common attrs 
+                'year': context.bindings.year,
+                'month': context.bindings.month,
+                'day': context.bindings.day,
+                'hour': context.bindings.hour,
+                'minute': context.bindings.minute,
+                'macAddress': context.bindings.macAddress,
+                'networkSecurityGroupId': context.bindings.networkSecurityGroupId
                 },
             'azure': {
                 'forwardername': context.executionContext.functionName,
