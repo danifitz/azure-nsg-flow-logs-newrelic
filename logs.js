@@ -1,4 +1,4 @@
-/** 
+/**
 * This is an azure function to collect logs data from Blob storage and send it to New Relic logs API.
 *    Author: Amine Benzaied
 *    Team: Expert Services
@@ -7,7 +7,12 @@
 
 var https = require('https');
 var url = require('url');
-var zlib= require('zlib');
+var zlib = require('zlib');
+
+//
+// Testing (DELETE)
+//
+var fs = require('fs');
 
 const VERSION = '1.0.0';
 
@@ -77,7 +82,7 @@ function generatePayloads(logs, context) {
                 'type': NR_LOGS_SOURCE,
                 'version': VERSION,
                 // https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger?tabs=javascript#blob-name-patterns
-                // Using the context bindings we get from the blob path to parameterise the path and add those variables as common attrs 
+                // Using the context bindings we get from the blob path to parameterise the path and add those variables as common attrs
                 'year': context.bindings.year,
                 'month': context.bindings.month,
                 'day': context.bindings.day,
@@ -99,8 +104,81 @@ function generatePayloads(logs, context) {
     }];
     let payloads = [];
 
+    console.log('logs', logs.length);
+
+    let newLogs = [];
     logs.forEach(logLine => {
+        // Check if we have flows data which we need to expand
+        if (logLine.hasOwnProperty('properties') && logLine.properties.hasOwnProperty('flows'))
+        {
+            let flows = logLine.properties.flows;
+            flows.forEach((flow) => {
+                flow.flows[0].flowTuples.forEach((tuple) => {
+                    tuple = tuple.split(',');
+
+                    data = {
+                        unixtimestamp: tuple[0],
+                        srcIp: tuple[1],
+                        destIp: tuple[2],
+                        srcPort: tuple[3],
+                        destPort: tuple[4],
+                        protocol: tuple[5],
+                        trafficflow: tuple[6],
+                        traffic: tuple[7],
+                        flowstate: tuple[8],
+                        packetsSourceToDest: parseInt(tuple[9]) || 0,
+                        bytesSentSourceToDest: parseInt(tuple[10]) || 0,
+                        packetsDestToSource: parseInt(tuple[11]) || 0,
+                        bytesSentDestToSource: parseInt(tuple[12]) || 0
+                    };
+
+                    // Check if we have an existing log line which matches everything but the srcPort and the packets/bytes data
+                    let previousLog = newLogs.find(element => {
+                        return element.unixtimestamp === data.unixtimestamp &&
+                            element.srcIp === data.srcIp &&
+                            element.destIp === data.destIp &&
+                            element.destPort === data.destPort &&
+                            element.protocol === data.protocol &&
+                            element.trafficflow === data.trafficflow &&
+                            element.traffic === data.traffic &&
+                            element.flowstate === data.flowstate
+                    });
+
+                    // Update the last log line with new data
+                    if (previousLog) {
+                        previousLog.packetsSourceToDest += data.packetsSourceToDest;
+                        previousLog.bytesSentSourceToDest += data.bytesSentSourceToDest;
+                        previousLog.packetsDestToSource += data.packetsDestToSource;
+                        previousLog.bytesSentDestToSource += data.bytesSentDestToSource;
+                    } else {
+                        // Create a new logLine
+                        logNew = {...logLine, ...data};
+
+                        // Delete the old data and push to logs
+                        delete logNew.properties;
+                        newLogs.push(logNew);
+                    }
+                });
+            });
+        } else {
+            newLogs.push(logLine);
+        }
+    });
+
+    // One more pass to remove the srcPort data
+    newLogs.forEach(logLine => {
+        if (logLine.hasOwnProperty('srcPort')) {
+            delete logLine.srcPort;
+        }
+    })
+
+    console.log('newLogs', newLogs.length);
+
+    // Send data to New Relic
+    newLogs.forEach(logLine => {
         const log = addMetadata(logLine);
+
+        // Split up payloads
         if ((JSON.stringify(payload).length + JSON.stringify(log).length) < NR_MAX_PAYLOAD_SIZE) {
             payload[0].logs.push(log);
         } else {
@@ -172,7 +250,7 @@ function transformData(logs, context) {
     if (!Array.isArray(parsedLogs)) { // Bad Format
         return buffer;
     }
-    if (typeof parsedLogs[0] === 'object') { 
+    if (typeof parsedLogs[0] === 'object') {
         if (parsedLogs[0].records !== undefined) { // type JSON records
             context.log("Type of logs: records Array");
             parsedLogs.forEach(message => {
@@ -195,12 +273,12 @@ function transformData(logs, context) {
 
 function parseData(logs, context) {
     let newLogs = logs;
-    
+
     if (!Array.isArray(logs)) {
         try {
             newLogs = JSON.parse(logs); // for strings let's see if we can parse it into Object
         } catch {
-            context.log.warn("cannot parse logs to JSON"); 
+            context.log.warn("cannot parse logs to JSON");
         }
     } else {
         newLogs = logs.map(log => {     // for arrays let's see if we can parse it into array of Objects
@@ -276,3 +354,25 @@ function wait(delay) {
         setTimeout(fulfill,delay||0);
     });
 };
+
+//
+// Testing (DELETE)
+//
+let context = {
+    log: (message) => { console.log(message) },
+    bindings: {
+        year: 1000,
+        day: 10,
+        hour: 10,
+        minute: 10,
+        macAddress: 'aa-bb-cc-dd-ee',
+        networkSecurityGroupId: 'security-group',
+    },
+    executionContext: {
+        functionName: 'functionName',
+        invocationId: 'invocationId'
+    }
+}
+fs.readFile('PT1H.json', function(err, data){
+    module.exports(context, data.toString())
+});
