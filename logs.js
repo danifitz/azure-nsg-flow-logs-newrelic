@@ -76,6 +76,8 @@ function compressData(data) {
 }
 
 function generatePayloads(logs, context) {
+
+    context.log('What context did we get?', context);
     const common = {
         'attributes': {
             'plugin': {
@@ -83,13 +85,13 @@ function generatePayloads(logs, context) {
                 'version': VERSION,
                 // https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-storage-blob-trigger?tabs=javascript#blob-name-patterns
                 // Using the context bindings we get from the blob path to parameterise the path and add those variables as common attrs
-                'year': context.bindings.year,
-                'month': context.bindings.month,
-                'day': context.bindings.day,
-                'hour': context.bindings.hour,
-                'minute': context.bindings.minute,
-                'macAddress': context.bindings.macAddress,
-                'networkSecurityGroupId': context.bindings.networkSecurityGroupId
+                'year': context.bindingData.year,
+                'month': context.bindingData.month,
+                'day': context.bindingData.day,
+                'hour': context.bindingData.hour,
+                'minute': context.bindingData.minute,
+                'macAddress': context.bindingData.macAddress,
+                'networkSecurityGroupId': context.bindingData.networkSecurityGroupId
                 },
             'azure': {
                 'forwardername': context.executionContext.functionName,
@@ -112,11 +114,13 @@ function generatePayloads(logs, context) {
         if (logLine.hasOwnProperty('properties') && logLine.properties.hasOwnProperty('flows'))
         {
             let flows = logLine.properties.flows;
+            let flowsRule = flows.rule;
             flows.forEach((flow) => {
                 flow.flows[0].flowTuples.forEach((tuple) => {
                     tuple = tuple.split(',');
 
                     data = {
+                        rule: flowsRule,
                         unixtimestamp: tuple[0],
                         srcIp: tuple[1],
                         destIp: tuple[2],
