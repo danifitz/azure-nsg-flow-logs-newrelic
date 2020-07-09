@@ -9,6 +9,11 @@ var https = require('https');
 var url = require('url');
 var zlib = require('zlib');
 
+//
+// Testing
+//
+var fs = require('fs');
+
 const VERSION = '1.0.0';
 
 // Global constants
@@ -348,3 +353,25 @@ function wait(delay) {
         setTimeout(fulfill,delay||0);
     });
 };
+
+//
+// Testing (DELETE)
+//
+let context = {
+    log: (message) => { console.log(message) },
+    bindings: {
+        year: 1000,
+        day: 10,
+        hour: 10,
+        minute: 10,
+        macAddress: 'aa-bb-cc-dd-ee',
+        networkSecurityGroupId: 'security-group',
+    },
+    executionContext: {
+        functionName: 'functionName',
+        invocationId: 'invocationId'
+    }
+}
+fs.readFile('PT1H.json', function(err, data){
+    module.exports(context, data.toString())
+});
